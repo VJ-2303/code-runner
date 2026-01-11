@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "code-runner",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

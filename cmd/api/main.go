@@ -68,7 +68,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      mux,
+		Handler:      app.router(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
