@@ -10,6 +10,21 @@ import (
 	"github.com/VJ-2303/code-runner/internal/data"
 )
 
+func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
+	data := envelope{
+		"system": "available",
+		"system_info": map[string]string{
+			"environment": app.config.env,
+			"version":     "1.0.0",
+		},
+	}
+
+	err := app.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
 func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Title    string `json:"title"`
@@ -19,8 +34,7 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 
 	err := app.readJSON(w, r, &input)
 	if err != nil {
-		app.logger.Error(err.Error())
-		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
+		app.badRequestResponse(w, r, err)
 		return
 	}
 
@@ -33,8 +47,7 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 
 	err = app.models.Snippets.Insert(snippet)
 	if err != nil {
-		app.logger.Error(err.Error())
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 	headers := make(http.Header)
@@ -42,8 +55,7 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"snippet": snippet}, headers)
 	if err != nil {
-		app.logger.Error(err.Error())
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		app.serverErrorResponse(w, r, err)
 	}
 }
 
@@ -52,24 +64,22 @@ func (app *application) showSnippetHandler(w http.ResponseWriter, r *http.Reques
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id < 1 {
-		http.NotFound(w, r)
+		app.notFoundResponse(w, r)
 		return
 	}
 
 	snippet, err := app.models.Snippets.Get(id)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
-			http.NotFound(w, r)
+			app.notFoundResponse(w, r)
 		} else {
-			app.logger.Error(err.Error())
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			app.serverErrorResponse(w, r, err)
 		}
 		return
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"snippet": snippet}, nil)
 	if err != nil {
-		app.logger.Error(err.Error())
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		app.serverErrorResponse(w, r, err)
 	}
 }
