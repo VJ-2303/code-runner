@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/VJ-2303/code-runner/internal/data"
+	"github.com/VJ-2303/code-runner/internal/validator"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,18 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 	err := app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+	v.Check(input.Title != "", "title", "must be provided")
+	v.Check(len(input.Title) <= 100, "title", "must not be more than 100 bytes")
+
+	v.Check(input.Content != "", "content", "must be provided")
+	v.Check(validator.PermittedValue(input.Language, "go", "python", "javascript"), "language", "must be either go, python, or javascript")
+
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
 		return
 	}
 
