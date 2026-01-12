@@ -96,3 +96,35 @@ func (app *application) showSnippetHandler(w http.ResponseWriter, r *http.Reques
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Code     string `json:"code"`
+		Language string `json:"language"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+
+	v.Check(input.Code != "", "code", "must be provided")
+	v.Check(validator.PermittedValue(input.Language, "go", "python", "javascript"), "language", "must be either go, python or javascript")
+
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
+		return
+	}
+	result, err := app.runner.Run(r.Context(), input.Code, input.Language)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{"result": result}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}

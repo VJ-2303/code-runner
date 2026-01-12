@@ -10,5 +10,7 @@ func (app *application) router() *http.ServeMux {
 	mux.HandleFunc("POST /v1/snippets", app.createSnippetHandler)
 	mux.HandleFunc("GET /v1/snippets/{id}", app.showSnippetHandler)
 
+	mux.HandleFunc("POST /v1/run", app.runCodeHandler)
+
 	return mux
 }

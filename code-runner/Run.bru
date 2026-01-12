@@ -1,0 +1,23 @@
+meta {
+  name: Run
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://localhost:4000/v1/run
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "fmt.Println(\"Hello World\")",
+    "language": "go"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

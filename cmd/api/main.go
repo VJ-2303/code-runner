@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/VJ-2303/code-runner/internal/data"
+	"github.com/VJ-2303/code-runner/internal/runner"
 	_ "github.com/lib/pq"
 )
 
@@ -29,6 +30,7 @@ type application struct {
 	config config
 	logger *slog.Logger
 	models data.Models
+	runner runner.Runner
 }
 
 func main() {
@@ -61,6 +63,7 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
+		runner: &runner.MockRunner{},
 	}
 
 	mux := http.NewServeMux()
