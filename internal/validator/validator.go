@@ -48,3 +48,7 @@ func (v *Validator) Check(ok bool, key, message string) {
 func PermittedValue[T comparable](value T, permittedValues ...T) bool {
 	return slices.Contains(permittedValues, value)
 }
+
+func Matches(value string, rx regexp.Regexp) bool {
+	return rx.MatchString(value)
+}

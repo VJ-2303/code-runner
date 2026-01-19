@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-var ErrRecordNotFound = errors.New("record not found")
-
 type Snippet struct {
 	ID        int64     `json:"id"`
 	Title     string    `json:"title"`
