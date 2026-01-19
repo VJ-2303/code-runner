@@ -12,9 +12,9 @@ post {
 
 body:json {
   {
-    "code": "fmt.Println(\"Hello World\")",
-    "language": "go"
-  }
+    "language": "go",
+    "code": "package main\nimport \"fmt\"\nfunc main() {\n\tfmt.Println(\"Go works!\")\n}"
+}
 }
 
 settings {

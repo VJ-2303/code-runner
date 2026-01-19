@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -112,13 +113,16 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 	v := validator.New()
 
 	v.Check(input.Code != "", "code", "must be provided")
-	v.Check(validator.PermittedValue(input.Language, "go", "python", "javascript"), "language", "must be either go, python or javascript")
+	v.Check(validator.PermittedValue(input.Language, "ruby", "python", "javascript"), "language", "must be either go, python or javascript")
 
 	if !v.Valid() {
 		app.failedValidationResponse(w, r, v.FieldErrors)
 		return
 	}
-	result, err := app.runner.Run(r.Context(), input.Code, input.Language)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := app.runner.Run(ctx, input.Code, input.Language)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

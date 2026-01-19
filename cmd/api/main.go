@@ -63,7 +63,7 @@ func main() {
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
-		runner: &runner.MockRunner{},
+		runner: runner.NewDockerRunner(),
 	}
 
 	mux := http.NewServeMux()
