@@ -12,5 +12,7 @@ func (app *application) router() *http.ServeMux {
 
 	mux.HandleFunc("POST /v1/run", app.runCodeHandler)
 
+	mux.HandleFunc("POST /v1/users", app.registerUserHandler)
+
 	return mux
 }
