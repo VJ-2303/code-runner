@@ -9,6 +9,7 @@ import (
 
 type Snippet struct {
 	ID        int64     `json:"id"`
+	UserID    int64     `json:"-"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	Language  string    `json:"language"`
@@ -23,11 +24,12 @@ type SnippetModel struct {
 
 func (m SnippetModel) Insert(snippet *Snippet) error {
 	query := `
-			INSERT INTO snippets (title, content, language, expires_at)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO snippets (user_id,title, content, language, expires_at)
+			VALUES ($1, $2, $3, $4, $5)
 			RETURNING id, created_at, version`
 
 	args := []any{
+		snippet.UserID,
 		snippet.Title,
 		snippet.Content,
 		snippet.Language,
@@ -45,7 +47,7 @@ func (m SnippetModel) Get(id int64) (*Snippet, error) {
 	}
 
 	query := `
-		SELECT id, title, content, language, created_at, expires_at, version
+		SELECT id,user_id, title, content, language, created_at, expires_at, version
 		FROM snippets
 		WHERE id = $1`
 
@@ -56,6 +58,7 @@ func (m SnippetModel) Get(id int64) (*Snippet, error) {
 
 	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&snippet.ID,
+		&snippet.UserID,
 		&snippet.Title,
 		&snippet.Content,
 		&snippet.Language,

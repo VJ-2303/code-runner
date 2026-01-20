@@ -52,8 +52,11 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	user := contextGetUser(r)
+
 	snippet := &data.Snippet{
 		Title:     input.Title,
+		UserID:    user.ID,
 		Content:   input.Content,
 		Language:  input.Language,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
