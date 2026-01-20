@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"time"
@@ -20,6 +21,12 @@ type User struct {
 	Password  password  `json:"-"`
 	Activated bool      `json:"activated"`
 	Version   int       `json:"version"`
+}
+
+var AnonymousUser = &User{}
+
+func (u *User) IsAnonymous() bool {
+	return u == AnonymousUser
 }
 
 type password struct {
@@ -106,6 +113,44 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+func (m UserModel) GetForToken(scope string, tokenPlainText string) (*User, error) {
+	hashToken := sha256.Sum256([]byte(tokenPlainText))
+
+	query := `
+		SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
+		FROM users
+		INNER JOIN tokens
+		ON users.id = tokens.user_id
+		WHERE tokens.hash = $1
+		AND tokens.scope = $2
+		AND tokens.expiry > $3
+		 	 `
+
+	args := []any{hashToken[:], scope, time.Now()}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var u User
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(
+		&u.ID,
+		&u.CreatedAt,
+		&u.Name,
+		&u.Email,
+		&u.Password.hash,
+		&u.Activated,
+		&u.Version,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
 }
 
 func ValidateUser(v *validator.Validator, user *User) {
