@@ -112,8 +112,7 @@ func ValidateUser(v *validator.Validator, user *User) {
 	v.Check(user.Name != "", "name", "must be provided")
 	v.Check(len(user.Name) <= 500, "name", "must not be more than 500 bytes")
 
-	v.Check(user.Email != "", "email", "must be provided")
-	v.Check(validator.Matches(user.Email, *validator.EmailRX), "email", "must be a valid email address")
+	ValidateEmail(v, user.Email)
 
 	if user.Password.plaintext != nil {
 		ValidatePassword(v, *user.Password.plaintext)
@@ -121,6 +120,12 @@ func ValidateUser(v *validator.Validator, user *User) {
 	if user.Password.hash == nil {
 		panic("missing password hash for user")
 	}
+}
+
+func ValidateEmail(v *validator.Validator, email string) {
+	v.Check(email != "", "email", "must be provided")
+	v.Check(validator.Matches(email, *validator.EmailRX), "email", "must be a valid email address")
+
 }
 
 func ValidatePassword(v *validator.Validator, password string) {

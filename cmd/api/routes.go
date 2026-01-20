@@ -13,6 +13,7 @@ func (app *application) router() *http.ServeMux {
 	mux.HandleFunc("POST /v1/run", app.runCodeHandler)
 
 	mux.HandleFunc("POST /v1/users", app.registerUserHandler)
+	mux.HandleFunc("POST /v1/tokens/authentication", app.createAuthenticationTokenHandler)
 
 	return mux
 }
