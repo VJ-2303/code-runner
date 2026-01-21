@@ -8,6 +8,8 @@ func (app *application) router() http.Handler {
 	mux.HandleFunc("GET /v1/healthcheck", app.healthcheckHandler)
 
 	mux.HandleFunc("POST /v1/snippets", app.requireAuthenticatedUser(app.createSnippetHandler))
+	mux.HandleFunc("GET /v1/snippets", app.requireAuthenticatedUser(app.GetAllSnippetHandler))
+	mux.HandleFunc("GET /v1/snippets/{id}", app.requireAuthenticatedUser(app.getSnippetHandler))
 
 	mux.HandleFunc("POST /v1/run", app.requireAuthenticatedUser(app.runCodeHandler))
 

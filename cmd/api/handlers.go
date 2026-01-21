@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/VJ-2303/code-runner/internal/data"
@@ -44,7 +45,7 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 	v.Check(len(input.Title) <= 100, "title", "must not be more than 100 bytes")
 
 	v.Check(input.Content != "", "content", "must be provided")
-	v.Check(validator.PermittedValue(input.Language, "go", "python", "javascript"), "language", "must be either go, python, or javascript")
+	v.Check(validator.PermittedValue(input.Language, "ruby", "python", "javascript"), "language", "must be either go, python, or javascript")
 
 	if !v.Valid() {
 		app.failedValidationResponse(w, r, v.FieldErrors)
@@ -111,7 +112,47 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) GetAllSnippetHandler(w http.ResponseWriter, r *http.Request) {
+	user := contextGetUser(r)
 
+	snippets, err := app.models.Snippets.GetAllForUserID(user.ID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{"snippets": snippets}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+}
+
+func (app *application) getSnippetHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+	user := contextGetUser(r)
+
+	snippet, err := app.models.Snippets.Get(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	if snippet.UserID != user.ID {
+		app.notFoundResponse(w, r)
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{"snippet": snippet}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
 
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {

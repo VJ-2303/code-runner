@@ -18,6 +18,13 @@ type Snippet struct {
 	Version   int32     `json:"version"`
 }
 
+type SnippetMini struct {
+	ID        int64     `json:"id"`
+	Title     string    `json:"title"`
+	Language  string    `json:"language"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type SnippetModel struct {
 	DB *sql.DB
 }
@@ -76,4 +83,41 @@ func (m SnippetModel) Get(id int64) (*Snippet, error) {
 	}
 
 	return &snippet, nil
+}
+
+func (m SnippetModel) GetAllForUserID(userID int64) ([]*SnippetMini, error) {
+	query := `
+		SELECT id, title, language, created_at
+		FROM snippets
+		WHERE user_id = $1
+			 `
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		return []*SnippetMini{}, err
+	}
+
+	var snippets []*SnippetMini
+
+	for rows.Next() {
+
+		var mini SnippetMini
+		err := rows.Scan(
+			&mini.ID,
+			&mini.Title,
+			&mini.Language,
+			&mini.CreatedAt,
+		)
+		if err != nil {
+			return []*SnippetMini{}, err
+		}
+		snippets = append(snippets, &mini)
+	}
+	if err := rows.Err(); err != nil {
+		return []*SnippetMini{}, err
+	}
+	return snippets, nil
 }
