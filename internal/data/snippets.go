@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/VJ-2303/code-runner/internal/validator"
 )
 
 type Snippet struct {
@@ -16,6 +18,14 @@ type Snippet struct {
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Version   int32     `json:"version"`
+}
+
+func ValidateSnippet(v *validator.Validator, snippet *Snippet) {
+	v.Check(snippet.Title != "", "title", "must be provided")
+	v.Check(len(snippet.Title) <= 100, "title", "must not be more than 100 bytes")
+
+	v.Check(snippet.Content != "", "content", "must be provided")
+	v.Check(validator.PermittedValue(snippet.Language, "ruby", "python", "javascript"), "language", "must be either go, python, or javascript")
 }
 
 type SnippetMini struct {
@@ -120,4 +130,40 @@ func (m SnippetModel) GetAllForUserID(userID int64) ([]*SnippetMini, error) {
 		return []*SnippetMini{}, err
 	}
 	return snippets, nil
+}
+
+func (m SnippetModel) Update(snippet *Snippet) error {
+	query := `
+			UPDATE snippets SET title = $1, content = $2, language = $3, version = version + 1
+			WHERE id = $4 and version = $5
+			RETURNING version
+	`
+	args := []any{snippet.Title, snippet.Content, snippet.Language, snippet.ID, snippet.Version}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&snippet.Version)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrEditConflict
+		}
+		return err
+	}
+	return nil
+}
+
+func (m SnippetModel) Delete(ID int64) error {
+	query := `
+		DELETE FROM snippets WHERE id = $1
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err := m.DB.ExecContext(ctx, query, ID)
+	if err != nil {
+		return err
+	}
+	return nil
 }

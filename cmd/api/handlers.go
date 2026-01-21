@@ -40,18 +40,6 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	v := validator.New()
-	v.Check(input.Title != "", "title", "must be provided")
-	v.Check(len(input.Title) <= 100, "title", "must not be more than 100 bytes")
-
-	v.Check(input.Content != "", "content", "must be provided")
-	v.Check(validator.PermittedValue(input.Language, "ruby", "python", "javascript"), "language", "must be either go, python, or javascript")
-
-	if !v.Valid() {
-		app.failedValidationResponse(w, r, v.FieldErrors)
-		return
-	}
-
 	user := contextGetUser(r)
 
 	snippet := &data.Snippet{
@@ -60,6 +48,13 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 		Content:   input.Content,
 		Language:  input.Language,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	}
+
+	v := validator.New()
+	data.ValidateSnippet(v, snippet)
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
+		return
 	}
 
 	err = app.models.Snippets.Insert(snippet)
@@ -155,6 +150,108 @@ func (app *application) getSnippetHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (app *application) updateSnippetHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+	snippet, err := app.models.Snippets.Get(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	user := contextGetUser(r)
+
+	if user.ID != snippet.UserID {
+		app.notFoundResponse(w, r)
+		return
+	}
+	var input struct {
+		Title    *string `json:"title"`
+		Language *string `json:"language"`
+		Content  *string `json:"content"`
+	}
+
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if input.Title != nil {
+		snippet.Title = *input.Title
+	}
+	if input.Content != nil {
+		snippet.Content = *input.Content
+	}
+	if input.Language != nil {
+		snippet.Language = *input.Language
+	}
+	v := validator.New()
+	data.ValidateSnippet(v, snippet)
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
+		return
+	}
+
+	err = app.models.Snippets.Update(snippet)
+	if err != nil {
+		if errors.Is(err, data.ErrEditConflict) {
+			app.editConflictResponse(w, r)
+			return
+		}
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"snippet": snippet}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) deleteSnippetHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 1 {
+		app.notFoundResponse(w, r)
+		return
+	}
+	snippet, err := app.models.Snippets.Get(id)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	user := contextGetUser(r)
+
+	if user.ID != snippet.UserID {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	err = app.models.Snippets.Delete(snippet.ID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	err = app.writeJSON(w, http.StatusGone, envelope{"message": "Snippet deleted successfully"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name     string `json:"name"`
@@ -216,6 +313,15 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	})
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) getProfileHandler(w http.ResponseWriter, r *http.Request) {
+	user := contextGetUser(r)
+
+	err := app.writeJSON(w, http.StatusOK, envelope{"profile": user}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
