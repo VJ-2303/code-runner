@@ -12,6 +12,7 @@ import (
 )
 
 var ErrDuplicateEmail = errors.New("duplicate email")
+var ErrEditConflict = errors.New("edit conflict")
 
 type User struct {
 	ID        int64     `json:"id"`
@@ -151,6 +152,33 @@ func (m UserModel) GetForToken(scope string, tokenPlainText string) (*User, erro
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (m UserModel) Update(user *User) error {
+	query := `
+		UPDATE users SET name = $1, email = $2, password_hash = $3, activated = $4, version = version +1
+		WHERE id = $5 AND version = $6
+		RETURNING VERSION
+			`
+	args := []any{
+		user.Name,
+		user.Email,
+		user.Password.hash,
+		user.Activated,
+		user.ID,
+		user.Version,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&user.Version)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrEditConflict
+		}
+		return err
+	}
+	return nil
 }
 
 func ValidateUser(v *validator.Validator, user *User) {

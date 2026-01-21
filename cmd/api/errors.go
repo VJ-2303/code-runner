@@ -51,3 +51,18 @@ func (app *application) authenticationRequiredResponse(w http.ResponseWriter, r 
 	message := "only authenticated users can access this resource"
 	app.errorResponse(w, r, http.StatusUnauthorized, message)
 }
+
+func (app *application) inactiveAccoutResponse(w http.ResponseWriter, r *http.Request) {
+	message := "your account must be authenticated"
+	app.errorResponse(w, r, http.StatusForbidden, message)
+}
+
+func (app *application) invalidActivationTokenResponse(w http.ResponseWriter, r *http.Request) {
+	message := "your activation token is invalid or expired"
+	app.errorResponse(w, r, http.StatusUnprocessableEntity, message)
+}
+
+func (app *application) editConflictResponse(w http.ResponseWriter, r *http.Request) {
+	message := "edit conflict occured, please try again later"
+	app.errorResponse(w, r, http.StatusConflict, message)
+}

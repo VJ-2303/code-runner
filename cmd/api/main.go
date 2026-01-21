@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/VJ-2303/code-runner/internal/data"
+	"github.com/VJ-2303/code-runner/internal/mailer"
 	"github.com/VJ-2303/code-runner/internal/runner"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -24,6 +26,13 @@ type config struct {
 		maxIdleConns int
 		maxIdleTime  time.Duration
 	}
+	smtp struct {
+		host     string
+		port     int
+		username string
+		password string
+		sender   string
+	}
 }
 
 type application struct {
@@ -31,10 +40,13 @@ type application struct {
 	logger *slog.Logger
 	models data.Models
 	runner runner.Runner
+	mailer mailer.Mailer
 }
 
 func main() {
 	var cfg config
+
+	godotenv.Load()
 
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "devolopment", "Environment (devolopment|staging|production)")
@@ -43,6 +55,12 @@ func main() {
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle lifetime")
+
+	flag.StringVar(&cfg.smtp.host, "smtp-host", "smtp.gmail.com", "SMTP host")
+	flag.IntVar(&cfg.smtp.port, "smtp-port", 587, "SMTP port")
+	flag.StringVar(&cfg.smtp.username, "smtp-user", "vanaraj1018@gmail.com", "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-pass", os.Getenv("SMTPPASS"), "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Code Runner <no-reply@coderunner.net>", "SMTP sender")
 
 	flag.Parse()
 
@@ -64,6 +82,7 @@ func main() {
 		logger: logger,
 		models: data.NewModels(db),
 		runner: runner.NewDockerRunner(),
+		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
 	mux := http.NewServeMux()

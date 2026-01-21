@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/VJ-2303/code-runner/internal/data"
@@ -76,31 +75,6 @@ func (app *application) createSnippetHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func (app *application) showSnippetHandler(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id < 1 {
-		app.notFoundResponse(w, r)
-		return
-	}
-
-	snippet, err := app.models.Snippets.Get(id)
-	if err != nil {
-		if errors.Is(err, data.ErrRecordNotFound) {
-			app.notFoundResponse(w, r)
-		} else {
-			app.serverErrorResponse(w, r, err)
-		}
-		return
-	}
-
-	err = app.writeJSON(w, http.StatusOK, envelope{"snippet": snippet}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
-}
-
 func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Code     string `json:"code"`
@@ -134,6 +108,10 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application) GetAllSnippetHandler(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +157,22 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
+
+	token, err := app.models.Tokens.New(user.ID, 72*time.Hour, data.ScopeActivation)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.background(func() {
+		data := map[string]string{
+			"VerifyURL": fmt.Sprintf("http://localhost:4000/v1/users/activate?token=%s", token.Plaintext),
+		}
+		err := app.mailer.Send(user.Email, "user_welcome.tmpl", data)
+		if err != nil {
+			app.logger.Error(err.Error())
+		}
+	})
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
 	if err != nil {

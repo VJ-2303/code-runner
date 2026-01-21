@@ -52,6 +52,11 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 		return
 	}
 
+	if !user.Activated {
+		app.inactiveAccoutResponse(w, r)
+		return
+	}
+
 	token, err := app.models.Tokens.New(user.ID, 24*time.Hour, data.ScopeAuthentication)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
@@ -62,4 +67,40 @@ func (app *application) createAuthenticationTokenHandler(w http.ResponseWriter, 
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application) activateUserHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+
+	if token == "" || len(token) != 26 {
+		app.invalidActivationTokenResponse(w, r)
+		return
+	}
+	user, err := app.models.Users.GetForToken(data.ScopeActivation, token)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.invalidActivationTokenResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	user.Activated = true
+
+	err = app.models.Users.Update(user)
+	if err != nil {
+		if errors.Is(err, data.ErrEditConflict) {
+			app.editConflictResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.models.Tokens.DeleteAllForUser(data.ScopeActivation, user.ID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "Account Activated Successfully"}, nil)
 }
