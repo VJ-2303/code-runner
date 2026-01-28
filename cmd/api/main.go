@@ -15,6 +15,7 @@ import (
 	"github.com/VJ-2303/code-runner/internal/runner"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 type config struct {
@@ -25,6 +26,10 @@ type config struct {
 		maxOpenConns int
 		maxIdleConns int
 		maxIdleTime  time.Duration
+	}
+	redis struct {
+		addr     string
+		password string
 	}
 	smtp struct {
 		host     string
@@ -41,6 +46,7 @@ type application struct {
 	models data.Models
 	runner runner.Runner
 	mailer mailer.Mailer
+	redis  *redis.Client
 }
 
 func main() {
@@ -55,6 +61,9 @@ func main() {
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle lifetime")
+
+	flag.StringVar(&cfg.redis.addr, "redis-addr", "localhost:6379", "Redis Address")
+	flag.StringVar(&cfg.redis.password, "redis-pass", "pa55word", "Redis password")
 
 	flag.StringVar(&cfg.smtp.host, "smtp-host", "smtp.gmail.com", "SMTP host")
 	flag.IntVar(&cfg.smtp.port, "smtp-port", 587, "SMTP port")
@@ -75,7 +84,16 @@ func main() {
 	}
 	defer db.Close()
 
-	logger.Info("database connection pool established")
+	logger.Info("postgres database connection pool established")
+
+	redisDB, err := openRedis(cfg)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer redisDB.Close()
+
+	logger.Info("redis database connection established")
 
 	app := &application{
 		config: cfg,
@@ -83,6 +101,7 @@ func main() {
 		models: data.NewModels(db),
 		runner: runner.NewDockerRunner(),
 		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		redis:  redisDB,
 	}
 
 	mux := http.NewServeMux()
@@ -120,4 +139,21 @@ func openDB(cfg config) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func openRedis(cfg config) (*redis.Client, error) {
+	rdb := redis.NewClient(
+		&redis.Options{
+			Addr:     cfg.redis.addr,
+			Password: cfg.redis.password,
+		},
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := rdb.Ping(ctx).Result()
+	if err != nil {
+		return nil, err
+	}
+	return rdb, nil
 }
