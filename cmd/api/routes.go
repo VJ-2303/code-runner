@@ -21,5 +21,5 @@ func (app *application) router() http.Handler {
 	mux.HandleFunc("GET /v1/users/activate", app.activateUserHandler)
 	mux.HandleFunc("GET /v1/users/profile", app.requireAuthenticatedUser(app.getProfileHandler))
 
-	return app.enableCORS(app.authenticate(mux))
+	return app.rateLimit(app.enableCORS(app.authenticate(mux)))
 }
