@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/VJ-2303/code-runner/internal/data"
@@ -113,9 +115,6 @@ func main() {
 		redis:  redisDB,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/healthcheck", app.healthcheckHandler)
-
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
 		Handler:      app.router(),
@@ -124,11 +123,32 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	logger.Info("starting server", "addr", srv.Addr, "env", cfg.env)
+	go func() {
+		logger.Info("starting server", "addr", cfg.port, "env", cfg.env)
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
+	}()
 
-	err = srv.ListenAndServe()
-	logger.Error(err.Error())
-	os.Exit(1)
+	quit := make(chan os.Signal, 1)
+
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	s := <-quit
+
+	logger.Info("shutting down server", "signal", s.String())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	err = srv.Shutdown(ctx)
+	if err != nil {
+		logger.Error("gracefull shutdown failed", "error", err)
+		srv.Close()
+	}
+	logger.Info("server stopped")
 }
 
 func openDB(cfg config) (*sql.DB, error) {

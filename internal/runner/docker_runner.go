@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 )
 
 type LanguageConfig struct {
@@ -69,6 +70,9 @@ func (dr *DockerRunner) Run(ctx context.Context, code, language string) (*Execut
 	dockerArgs = append(dockerArgs, config.Command...)
 
 	cmd := exec.CommandContext(ctx, "docker", dockerArgs...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
