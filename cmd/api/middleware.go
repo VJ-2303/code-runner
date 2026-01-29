@@ -5,11 +5,25 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/VJ-2303/code-runner/internal/data"
 	"github.com/redis/go-redis/v9"
 )
+
+var rateLimitScript = redis.NewScript(`
+		local current = redis.call('GET',KEYS[1])
+		if current and tonumber(current) >= tonumber(ARGV[1]) then
+			return 0
+		end
+
+		local new = redis.call('INCR',KEYS[1])
+		if new == 1 then
+			redis.call('EXPIRE',KEYS[1],ARGV[2])
+		end
+		return 1
+	`)
 
 func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,20 +90,13 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 }
 
 func (app *application) rateLimit(next http.Handler) http.Handler {
-	var rateLimitScript = redis.NewScript(`
-		local current = redis.call('GET',KEYS[1])
-		if current and tonumber(current) >= tonumber(ARGV[1]) then
-			return 0
-		end
-
-		local new = redis.call('INCR',KEYS[1])
-		if new == 1 then
-			redis.call('EXPIRE',KEYS[1],ARGV[2])
-		end
-		return 1
-	`)
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if !app.config.limiter.enabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			app.serverErrorResponse(w, r, err)
@@ -98,8 +105,8 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 
 		key := fmt.Sprintf("rate_limit:%s", ip)
 
-		limit := 10
-		window := 60
+		limit := app.config.limiter.limit
+		window := app.config.limiter.window
 
 		result, err := rateLimitScript.Run(r.Context(), app.redis, []string{key}, limit, window).Result()
 
@@ -109,6 +116,7 @@ func (app *application) rateLimit(next http.Handler) http.Handler {
 			return
 		}
 		if result == int64(0) {
+			w.Header().Set("Retry-After", strconv.Itoa(window))
 			app.rateLimitExceededResponse(w, r)
 			return
 		}

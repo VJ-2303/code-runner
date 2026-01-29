@@ -31,6 +31,11 @@ type config struct {
 		addr     string
 		password string
 	}
+	limiter struct {
+		enabled bool
+		limit   int
+		window  int
+	}
 	smtp struct {
 		host     string
 		port     int
@@ -64,6 +69,10 @@ func main() {
 
 	flag.StringVar(&cfg.redis.addr, "redis-addr", "localhost:6379", "Redis Address")
 	flag.StringVar(&cfg.redis.password, "redis-pass", "pa55word", "Redis password")
+
+	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+	flag.IntVar(&cfg.limiter.limit, "limiter-limit", 20, "Ratelimiter limit")
+	flag.IntVar(&cfg.limiter.window, "limiter-window", 60, "Ratelimiter window size")
 
 	flag.StringVar(&cfg.smtp.host, "smtp-host", "smtp.gmail.com", "SMTP host")
 	flag.IntVar(&cfg.smtp.port, "smtp-port", 587, "SMTP port")
