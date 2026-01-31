@@ -326,3 +326,61 @@ func (app *application) getProfileHandler(w http.ResponseWriter, r *http.Request
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) createShareTokenHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id < 0 {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	token, err := app.generateRandomToken()
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	user := contextGetUser(r)
+
+	err = app.models.Snippets.SetShareToken(id, user.ID, token)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+			return
+		}
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusCreated, envelope{"share_link": fmt.Sprintf("http://localhost:4000/v1/snippets/share/%s", token)}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+}
+
+func (app *application) getSharedSnippetHandler(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if token == "" {
+		app.notFoundResponse(w, r)
+		return
+	}
+
+	snippet, err := app.models.Snippets.GetByShareToken(token)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.notFoundResponse(w, r)
+		} else {
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"snippet": snippet}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+}

@@ -120,7 +120,7 @@ func main() {
 		Handler:      app.router(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 20 * time.Second,
 	}
 
 	go func() {

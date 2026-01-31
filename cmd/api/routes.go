@@ -12,6 +12,8 @@ func (app *application) router() http.Handler {
 	mux.HandleFunc("GET /v1/snippets/{id}", app.requireAuthenticatedUser(app.getSnippetHandler))
 	mux.HandleFunc("PATCH /v1/snippets/{id}", app.requireAuthenticatedUser(app.updateSnippetHandler))
 	mux.HandleFunc("DELETE /v1/snippets/{id}", app.requireAuthenticatedUser(app.deleteSnippetHandler))
+	mux.HandleFunc("POST /v1/snippets/share/{id}", app.requireAuthenticatedUser(app.createShareTokenHandler))
+	mux.HandleFunc("GET /v1/snippets/share/{token}", app.getSharedSnippetHandler)
 
 	mux.HandleFunc("POST /v1/run", app.requireAuthenticatedUser(app.runCodeHandler))
 

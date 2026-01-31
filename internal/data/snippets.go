@@ -18,6 +18,8 @@ type Snippet struct {
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Version   int32     `json:"version"`
+
+	ShareToken *string `json:"share_token,omitempty"`
 }
 
 func ValidateSnippet(v *validator.Validator, snippet *Snippet) {
@@ -166,4 +168,56 @@ func (m SnippetModel) Delete(ID int64) error {
 		return err
 	}
 	return nil
+}
+
+func (m SnippetModel) SetShareToken(id int64, userID int64, token string) error {
+	query := `
+		UPDATE snippets SET share_token = $1, version = version + 1
+		WHERE id = $2 AND user_id = $3
+		RETURNING version
+			 `
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var version int
+	err := m.DB.QueryRowContext(ctx, query, token, id, userID).Scan(&version)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrRecordNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func (m SnippetModel) GetByShareToken(token string) (*Snippet, error) {
+	query := `
+		SELECT id, user_id, title, content, language, created_at, expires_at, version, share_token
+		FROM snippets
+		WHERE share_token = $1
+			 `
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var s Snippet
+
+	err := m.DB.QueryRowContext(ctx, query, token).Scan(
+		&s.ID,
+		&s.UserID,
+		&s.Title,
+		&s.Content,
+		&s.Language,
+		&s.CreatedAt,
+		&s.ExpiresAt,
+		&s.Version,
+		&s.ShareToken,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &s, nil
 }
