@@ -332,10 +332,15 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 func (app *application) getProfileHandler(w http.ResponseWriter, r *http.Request) {
 	user := contextGetUser(r)
 
-	err := app.writeJSON(w, http.StatusOK, envelope{"profile": user}, nil)
+	userStats, err := app.models.Users.GetUserStats(user.ID)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"user":  user,
+		"stats": userStats,
+	}, nil)
 }
 
 func (app *application) createShareTokenHandler(w http.ResponseWriter, r *http.Request) {

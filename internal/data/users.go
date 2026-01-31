@@ -24,6 +24,11 @@ type User struct {
 	Version   int       `json:"version"`
 }
 
+type UserStats struct {
+	TotalSnippets int
+	Frequency     map[string]int
+}
+
 var AnonymousUser = &User{}
 
 func (u *User) IsAnonymous() bool {
@@ -33,6 +38,32 @@ func (u *User) IsAnonymous() bool {
 type password struct {
 	plaintext *string
 	hash      []byte
+}
+
+func ValidateUser(v *validator.Validator, user *User) {
+	v.Check(user.Name != "", "name", "must be provided")
+	v.Check(len(user.Name) <= 500, "name", "must not be more than 500 bytes")
+
+	ValidateEmail(v, user.Email)
+
+	if user.Password.plaintext != nil {
+		ValidatePassword(v, *user.Password.plaintext)
+	}
+	if user.Password.hash == nil {
+		panic("missing password hash for user")
+	}
+}
+
+func ValidateEmail(v *validator.Validator, email string) {
+	v.Check(email != "", "email", "must be provided")
+	v.Check(validator.Matches(email, *validator.EmailRX), "email", "must be a valid email address")
+
+}
+
+func ValidatePassword(v *validator.Validator, password string) {
+	v.Check(password != "", "password", "must be provided")
+	v.Check(len(password) >= 8, "password", "must be at least 8 bytes long")
+	v.Check(len(password) <= 72, "password", "must not be more than 72 bytes long")
 }
 
 func (p *password) Set(plaintextPassword string) error {
@@ -181,28 +212,35 @@ func (m UserModel) Update(user *User) error {
 	return nil
 }
 
-func ValidateUser(v *validator.Validator, user *User) {
-	v.Check(user.Name != "", "name", "must be provided")
-	v.Check(len(user.Name) <= 500, "name", "must not be more than 500 bytes")
-
-	ValidateEmail(v, user.Email)
-
-	if user.Password.plaintext != nil {
-		ValidatePassword(v, *user.Password.plaintext)
+func (m UserModel) GetUserStats(userID int64) (*UserStats, error) {
+	query := `
+			SELECT language, COUNT(*)
+			FROM snippets
+			WHERE user_id = $1
+			GROUP BY language`
+	us := UserStats{
+		TotalSnippets: 0,
+		Frequency:     make(map[string]int),
 	}
-	if user.Password.hash == nil {
-		panic("missing password hash for user")
+
+	rows, err := m.DB.Query(query, userID)
+	if err != nil {
+		return nil, err
 	}
-}
+	defer rows.Close()
 
-func ValidateEmail(v *validator.Validator, email string) {
-	v.Check(email != "", "email", "must be provided")
-	v.Check(validator.Matches(email, *validator.EmailRX), "email", "must be a valid email address")
+	for rows.Next() {
+		var language string
+		var count int
 
-}
-
-func ValidatePassword(v *validator.Validator, password string) {
-	v.Check(password != "", "password", "must be provided")
-	v.Check(len(password) >= 8, "password", "must be at least 8 bytes long")
-	v.Check(len(password) <= 72, "password", "must not be more than 72 bytes long")
+		if err := rows.Scan(&language, &count); err != nil {
+			return nil, err
+		}
+		us.Frequency[language] = count
+		us.TotalSnippets += count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &us, nil
 }
