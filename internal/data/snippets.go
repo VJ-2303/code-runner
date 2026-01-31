@@ -27,7 +27,7 @@ func ValidateSnippet(v *validator.Validator, snippet *Snippet) {
 	v.Check(len(snippet.Title) <= 100, "title", "must not be more than 100 bytes")
 
 	v.Check(snippet.Content != "", "content", "must be provided")
-	v.Check(validator.PermittedValue(snippet.Language, "ruby", "python", "javascript"), "language", "must be either go, python, or javascript")
+	v.Check(validator.PermittedValue(snippet.Language, "ruby", "python", "javascript"), "language", "must be either ruby, python, or javascript")
 }
 
 type SnippetMini struct {
@@ -97,17 +97,17 @@ func (m SnippetModel) Get(id int64) (*Snippet, error) {
 	return &snippet, nil
 }
 
-func (m SnippetModel) GetAllForUserID(userID int64) ([]*SnippetMini, error) {
+func (m SnippetModel) GetAllForUserID(userID int64, f Filters) ([]*SnippetMini, error) {
 	query := `
 		SELECT id, title, language, created_at
 		FROM snippets
-		WHERE user_id = $1
+		WHERE user_id = $1 AND (language = $2 or $2 = '')
 			 `
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := m.DB.QueryContext(ctx, query, userID)
+	rows, err := m.DB.QueryContext(ctx, query, userID, f.Language)
 	if err != nil {
 		return []*SnippetMini{}, err
 	}

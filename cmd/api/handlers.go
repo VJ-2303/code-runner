@@ -109,7 +109,18 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 func (app *application) GetAllSnippetHandler(w http.ResponseWriter, r *http.Request) {
 	user := contextGetUser(r)
 
-	snippets, err := app.models.Snippets.GetAllForUserID(user.ID)
+	f := data.Filters{
+		Language: r.URL.Query().Get("lang"),
+	}
+	v := validator.New()
+	data.ValidateFilters(v, f)
+
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
+		return
+	}
+
+	snippets, err := app.models.Snippets.GetAllForUserID(user.ID, f)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
