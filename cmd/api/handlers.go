@@ -109,10 +109,13 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 func (app *application) GetAllSnippetHandler(w http.ResponseWriter, r *http.Request) {
 	user := contextGetUser(r)
 
-	f := data.Filters{
-		Language: r.URL.Query().Get("lang"),
-	}
 	v := validator.New()
+	qs := r.URL.Query()
+	f := data.Filters{
+		Language: app.readString(qs, "lang", ""),
+		PageSize: app.readInt(qs, "page_size", 5, v),
+		Page:     app.readInt(qs, "page", 1, v),
+	}
 	data.ValidateFilters(v, f)
 
 	if !v.Valid() {
@@ -120,12 +123,12 @@ func (app *application) GetAllSnippetHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	snippets, err := app.models.Snippets.GetAllForUserID(user.ID, f)
+	snippets, metaData, err := app.models.Snippets.GetAllForUserID(user.ID, f)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"snippets": snippets}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"snippets": snippets, "meta_data": metaData}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

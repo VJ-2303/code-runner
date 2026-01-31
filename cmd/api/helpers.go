@@ -9,7 +9,11 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
+
+	"github.com/VJ-2303/code-runner/internal/validator"
 )
 
 type envelope map[string]any
@@ -104,4 +108,25 @@ func (app *application) generateRandomToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func (app *application) readString(qs url.Values, key, defaultValue string) string {
+	value := qs.Get(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+func (app *application) readInt(qs url.Values, key string, defaultValue int, v *validator.Validator) int {
+	value := qs.Get(key)
+	if value == "" {
+		return defaultValue
+	}
+	i, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		v.AddError("key", "must be an integer")
+		return defaultValue
+	}
+	return int(i)
 }

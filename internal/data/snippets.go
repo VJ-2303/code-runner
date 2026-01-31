@@ -97,41 +97,45 @@ func (m SnippetModel) Get(id int64) (*Snippet, error) {
 	return &snippet, nil
 }
 
-func (m SnippetModel) GetAllForUserID(userID int64, f Filters) ([]*SnippetMini, error) {
+func (m SnippetModel) GetAllForUserID(userID int64, f Filters) ([]*SnippetMini, Metadata, error) {
 	query := `
-		SELECT id, title, language, created_at
+		SELECT COUNT(*) OVER(), id, title, language, created_at
 		FROM snippets
 		WHERE user_id = $1 AND (language = $2 or $2 = '')
+		LIMIT $3 OFFSET $4
 			 `
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := m.DB.QueryContext(ctx, query, userID, f.Language)
+	rows, err := m.DB.QueryContext(ctx, query, userID, f.Language, f.limit(), f.offset())
 	if err != nil {
-		return []*SnippetMini{}, err
+		return []*SnippetMini{}, Metadata{}, err
 	}
 
 	var snippets []*SnippetMini
+	var totalRecords int
 
 	for rows.Next() {
 
 		var mini SnippetMini
 		err := rows.Scan(
+			&totalRecords,
 			&mini.ID,
 			&mini.Title,
 			&mini.Language,
 			&mini.CreatedAt,
 		)
 		if err != nil {
-			return []*SnippetMini{}, err
+			return []*SnippetMini{}, Metadata{}, err
 		}
 		snippets = append(snippets, &mini)
 	}
 	if err := rows.Err(); err != nil {
-		return []*SnippetMini{}, err
+		return []*SnippetMini{}, Metadata{}, err
 	}
-	return snippets, nil
+	md := CalculateMetaData(totalRecords, f.PageSize, f.Page)
+	return snippets, md, nil
 }
 
 func (m SnippetModel) Update(snippet *Snippet) error {
