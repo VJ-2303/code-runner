@@ -35,6 +35,7 @@ type config struct {
 		password string
 		sender   string
 	}
+	runnerPoolSize int
 }
 
 type application struct {
@@ -64,6 +65,8 @@ func main() {
 	flag.StringVar(&cfg.smtp.password, "smtp-pass", os.Getenv("SMTPPASS"), "SMTP password")
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", os.Getenv("SMTP_SENDER"), "SMTP sender")
 
+	flag.IntVar(&cfg.runnerPoolSize, "runner-poolsize", 3, "Code Runner Pool Size")
+
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -79,11 +82,17 @@ func main() {
 
 	logger.Info("postgres database connection pool established")
 
+	dockerRunner, err := runner.NewDockerRunner(logger, cfg.runnerPoolSize)
+	if err != nil {
+		logger.Error("failed to create code runner", "error", err)
+		os.Exit(1)
+	}
+
 	app := &application{
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
-		runner: runner.NewDockerRunner(),
+		runner: dockerRunner,
 		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 
@@ -120,6 +129,8 @@ func main() {
 		logger.Error("gracefull shutdown failed", "error", err)
 		srv.Close()
 	}
+
+	dockerRunner.Close()
 	logger.Info("server stopped")
 }
 

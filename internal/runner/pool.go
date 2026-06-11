@@ -84,6 +84,11 @@ func (p *ContainerPool) createWarmContainer(language string) (string, error) {
 
 		CapDrop: []string{"ALL"},
 
+		Tmpfs: map[string]string{
+			"/tmp": "rw,noexec,nosuid,size=16m",
+			"/app": "rw,noexec,nosuid,size=8m",
+		},
+
 		SecurityOpt: []string{"no-new-privileges"},
 	}
 	resp, err := p.client.ContainerCreate(ctx, containerCfg, hostCfg, &network.NetworkingConfig{}, nil, "")
