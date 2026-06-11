@@ -8,5 +8,5 @@ type ExecuteResult struct {
 }
 
 type Runner interface {
-	Run(ctx context.Context, code string, language string) (*ExecuteResult, error)
+	Run(ctx context.Context, code string, language string, stdin string) (*ExecuteResult, error)
 }

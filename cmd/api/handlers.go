@@ -30,6 +30,7 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Code     string `json:"code"`
 		Language string `json:"language"`
+		Stdin    string `json:"stdin"`
 	}
 
 	err := app.readJSON(w, r, &input)
@@ -50,7 +51,7 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	result, err := app.runner.Run(ctx, input.Code, input.Language)
+	result, err := app.runner.Run(ctx, input.Code, input.Language, input.Stdin)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return

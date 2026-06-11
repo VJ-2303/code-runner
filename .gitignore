@@ -1,3 +1,4 @@
 .env*
 code-runner/
 commands.sh
+docs/
