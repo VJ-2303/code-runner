@@ -66,6 +66,7 @@ func (p *ContainerPool) createWarmContainer(language string) (string, error) {
 	containerCfg := &container.Config{
 		Image: langCfg.Image,
 		Cmd:   []string{"sleep", "infinity"},
+		User:  "nobody",
 
 		Labels: map[string]string{
 			"code-runner.pool":     "true",
@@ -74,10 +75,16 @@ func (p *ContainerPool) createWarmContainer(language string) (string, error) {
 	}
 	hostCfg := &container.HostConfig{
 		Resources: container.Resources{
-			Memory:   128 * 1024 * 1024,
-			NanoCPUs: 500_000_000,
+			Memory:    128 * 1024 * 1024,
+			NanoCPUs:  500_000_000,
+			PidsLimit: int64Ptr(64),
 		},
-		NetworkMode: "none",
+		NetworkMode:    "none",
+		ReadonlyRootfs: true,
+
+		CapDrop: []string{"ALL"},
+
+		SecurityOpt: []string{"no-new-privileges"},
 	}
 	resp, err := p.client.ContainerCreate(ctx, containerCfg, hostCfg, &network.NetworkingConfig{}, nil, "")
 	if err != nil {
