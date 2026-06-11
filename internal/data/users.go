@@ -24,11 +24,6 @@ type User struct {
 	Version   int       `json:"version"`
 }
 
-type UserStats struct {
-	TotalSnippets int
-	Frequency     map[string]int
-}
-
 var AnonymousUser = &User{}
 
 func (u *User) IsAnonymous() bool {
@@ -210,37 +205,4 @@ func (m UserModel) Update(user *User) error {
 		return err
 	}
 	return nil
-}
-
-func (m UserModel) GetUserStats(userID int64) (*UserStats, error) {
-	query := `
-			SELECT language, COUNT(*)
-			FROM snippets
-			WHERE user_id = $1
-			GROUP BY language`
-	us := UserStats{
-		TotalSnippets: 0,
-		Frequency:     make(map[string]int),
-	}
-
-	rows, err := m.DB.Query(query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var language string
-		var count int
-
-		if err := rows.Scan(&language, &count); err != nil {
-			return nil, err
-		}
-		us.Frequency[language] = count
-		us.TotalSnippets += count
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return &us, nil
 }

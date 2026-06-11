@@ -2,28 +2,11 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/VJ-2303/code-runner/internal/data"
-	"github.com/redis/go-redis/v9"
 )
-
-var rateLimitScript = redis.NewScript(`
-		local current = redis.call('GET',KEYS[1])
-		if current and tonumber(current) >= tonumber(ARGV[1]) then
-			return 0
-		end
-
-		local new = redis.call('INCR',KEYS[1])
-		if new == 1 then
-			redis.call('EXPIRE',KEYS[1],ARGV[2])
-		end
-		return 1
-	`)
 
 func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,56 +51,6 @@ func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.Han
 
 		if user.IsAnonymous() {
 			app.authenticationRequiredResponse(w, r)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (app *application) enableCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (app *application) rateLimit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		if !app.config.limiter.enabled {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
-
-		key := fmt.Sprintf("rate_limit:%s", ip)
-
-		limit := app.config.limiter.limit
-		window := app.config.limiter.window
-
-		result, err := rateLimitScript.Run(r.Context(), app.redis, []string{key}, limit, window).Result()
-
-		if err != nil {
-			app.logger.Error("rate limit error", "error", err)
-			next.ServeHTTP(w, r)
-			return
-		}
-		if result == int64(0) {
-			w.Header().Set("Retry-After", strconv.Itoa(window))
-			app.rateLimitExceededResponse(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -1,1 +1,0 @@
-ALTER TABLE snippets DROP COLUMN IF EXISTS user_id;

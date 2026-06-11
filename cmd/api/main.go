@@ -17,7 +17,6 @@ import (
 	"github.com/VJ-2303/code-runner/internal/runner"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 type config struct {
@@ -28,15 +27,6 @@ type config struct {
 		maxOpenConns int
 		maxIdleConns int
 		maxIdleTime  time.Duration
-	}
-	redis struct {
-		addr     string
-		password string
-	}
-	limiter struct {
-		enabled bool
-		limit   int
-		window  int
 	}
 	smtp struct {
 		host     string
@@ -53,7 +43,6 @@ type application struct {
 	models data.Models
 	runner runner.Runner
 	mailer mailer.Mailer
-	redis  *redis.Client
 }
 
 func main() {
@@ -62,25 +51,18 @@ func main() {
 	godotenv.Load()
 
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
-	flag.StringVar(&cfg.env, "env", "devolopment", "Environment (devolopment|staging|production)")
+	flag.StringVar(&cfg.env, "env", os.Getenv("ENV"), "Environment (devolopment|staging|production)")
 
-	flag.StringVar(&cfg.db.dsn, "db-dsn", "postgres://code_runner_user:pa55word@localhost/code_runner?sslmode=disable", "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.dsn, "db-dsn", os.Getenv("DB_DSN"), "PostgreSQL DSN")
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle lifetime")
 
-	flag.StringVar(&cfg.redis.addr, "redis-addr", "localhost:6379", "Redis Address")
-	flag.StringVar(&cfg.redis.password, "redis-pass", "pa55word", "Redis password")
-
-	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
-	flag.IntVar(&cfg.limiter.limit, "limiter-limit", 20, "Ratelimiter limit")
-	flag.IntVar(&cfg.limiter.window, "limiter-window", 60, "Ratelimiter window size")
-
-	flag.StringVar(&cfg.smtp.host, "smtp-host", "smtp.gmail.com", "SMTP host")
+	flag.StringVar(&cfg.smtp.host, "smtp-host", os.Getenv("SMTP_HOST"), "SMTP host")
 	flag.IntVar(&cfg.smtp.port, "smtp-port", 587, "SMTP port")
-	flag.StringVar(&cfg.smtp.username, "smtp-user", "vanaraj1018@gmail.com", "SMTP username")
+	flag.StringVar(&cfg.smtp.username, "smtp-user", os.Getenv("SMTP_USER"), "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-pass", os.Getenv("SMTPPASS"), "SMTP password")
-	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Code Runner <no-reply@coderunner.net>", "SMTP sender")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", os.Getenv("SMTP_SENDER"), "SMTP sender")
 
 	flag.Parse()
 
@@ -97,22 +79,12 @@ func main() {
 
 	logger.Info("postgres database connection pool established")
 
-	redisDB, err := openRedis(cfg)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	defer redisDB.Close()
-
-	logger.Info("redis database connection established")
-
 	app := &application{
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
 		runner: runner.NewDockerRunner(),
 		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
-		redis:  redisDB,
 	}
 
 	srv := &http.Server{
@@ -168,21 +140,4 @@ func openDB(cfg config) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
-}
-
-func openRedis(cfg config) (*redis.Client, error) {
-	rdb := redis.NewClient(
-		&redis.Options{
-			Addr:     cfg.redis.addr,
-			Password: cfg.redis.password,
-		},
-	)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := rdb.Ping(ctx).Result()
-	if err != nil {
-		return nil, err
-	}
-	return rdb, nil
 }
