@@ -50,7 +50,7 @@ func (m ApiKeyModel) GenerateApiKey(userID int64, name string) (*ApiKey, string,
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err = m.DB.QueryRowContext(ctx, query, userID, name, prefix, hash).Scan(
+	err = m.DB.QueryRowContext(ctx, query, userID, name, prefix, hash[:]).Scan(
 		&apiKey.ID, &apiKey.CreatedAt,
 	)
 
@@ -66,7 +66,7 @@ func (m ApiKeyModel) GetUserForApiKey(plaintext string) (*User, error) {
 
 	query := `
 		SELECT users.id, users.created_at, users.name, users.email,
-		       users.password_hash, users.activated, users.version
+		       users.password_hash, users.activated, users.version, users.daily_limit
 		FROM users
 		INNER JOIN api_keys ON users.id = api_keys.user_id
 		WHERE api_keys.hash = $1`
@@ -76,7 +76,7 @@ func (m ApiKeyModel) GetUserForApiKey(plaintext string) (*User, error) {
 
 	var user User
 
-	err := m.DB.QueryRowContext(ctx, query, hash).Scan(
+	err := m.DB.QueryRowContext(ctx, query, hash[:]).Scan(
 		&user.ID,
 		&user.CreatedAt,
 		&user.Name,
@@ -84,6 +84,7 @@ func (m ApiKeyModel) GetUserForApiKey(plaintext string) (*User, error) {
 		&user.Password.hash,
 		&user.Activated,
 		&user.Version,
+		&user.DailyLimit,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -157,22 +158,4 @@ func (m ApiKeyModel) Delete(id, userID int64) error {
 	}
 
 	return nil
-}
-
-func (m ApiKeyModel) GetDailyLimit(userID int64) (int, error) {
-	query := `SELECT daily_limit FROM users WHERE id = $1`
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	var limit int
-	err := m.DB.QueryRowContext(ctx, query, userID).Scan(&limit)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, ErrRecordNotFound
-		}
-		return 0, err
-	}
-
-	return limit, nil
 }

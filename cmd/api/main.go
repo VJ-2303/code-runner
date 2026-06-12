@@ -14,9 +14,11 @@ import (
 
 	"github.com/VJ-2303/code-runner/internal/data"
 	"github.com/VJ-2303/code-runner/internal/mailer"
+	"github.com/VJ-2303/code-runner/internal/ratelimiter"
 	"github.com/VJ-2303/code-runner/internal/runner"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 type config struct {
@@ -36,14 +38,16 @@ type config struct {
 		sender   string
 	}
 	runnerPoolSize int
+	redisURL       string
 }
 
 type application struct {
-	config config
-	logger *slog.Logger
-	models data.Models
-	runner runner.Runner
-	mailer mailer.Mailer
+	config  config
+	logger  *slog.Logger
+	models  data.Models
+	runner  runner.Runner
+	mailer  mailer.Mailer
+	limiter *ratelimiter.RateLimiter
 }
 
 func main() {
@@ -66,6 +70,7 @@ func main() {
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", os.Getenv("SMTP_SENDER"), "SMTP sender")
 
 	flag.IntVar(&cfg.runnerPoolSize, "runner-poolsize", 3, "Code Runner Pool Size")
+	flag.StringVar(&cfg.redisURL, "redis-url", os.Getenv("REDIS_URL"), "Redis server URL")
 
 	flag.Parse()
 
@@ -88,12 +93,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: cfg.redisURL,
+	})
+
+	// Verify Redis connection.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		logger.Error("failed to connect to redis", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("redis connection established")
+
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(db),
-		runner: dockerRunner,
-		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		config:  cfg,
+		logger:  logger,
+		models:  data.NewModels(db),
+		runner:  dockerRunner,
+		mailer:  mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		limiter: ratelimiter.New(redisClient),
 	}
 
 	srv := &http.Server{
@@ -121,7 +140,7 @@ func main() {
 
 	logger.Info("shutting down server", "signal", s.String())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	err = srv.Shutdown(ctx)
@@ -131,6 +150,7 @@ func main() {
 	}
 
 	dockerRunner.Close()
+	redisClient.Close()
 	logger.Info("server stopped")
 }
 

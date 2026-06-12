@@ -127,3 +127,117 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) createApiKeyHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name string `json:"name"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+
+	v.Check(input.Name != "", "name", "must be provided")
+	v.Check(len(input.Name) <= 100, "name", "must not be more than 100 characters")
+
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
+		return
+	}
+
+	user := contextGetUser(r)
+
+	apiKey, plaintext, err := app.models.ApiKeys.GenerateApiKey(user.ID, input.Name)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	err = app.writeJSON(w, http.StatusCreated, envelope{
+		"api_key": apiKey,
+		"key":     plaintext,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) listApiKeysHandler(w http.ResponseWriter, r *http.Request) {
+	user := contextGetUser(r)
+
+	keys, err := app.models.ApiKeys.GetAllForUser(user.ID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"api_keys": keys}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) deleteApiKeyHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID int64 `json:"id"`
+	}
+
+	err := app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+
+	v.Check(input.ID > 0, "id", "must be a positive integer")
+
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.FieldErrors)
+		return
+	}
+
+	user := contextGetUser(r)
+
+	err = app.models.ApiKeys.Delete(input.ID, user.ID)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "api key deleted successfully"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) getUsageHandler(w http.ResponseWriter, r *http.Request) {
+	user := contextGetUser(r)
+
+	usage, err := app.limiter.GetUsage(r.Context(), user.ID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	limit := user.DailyLimit
+
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"usage": map[string]any{
+			"used":      usage,
+			"limit":     limit,
+			"remaining": int64(limit) - usage,
+		},
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}

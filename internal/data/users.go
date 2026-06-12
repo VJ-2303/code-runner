@@ -15,13 +15,14 @@ var ErrDuplicateEmail = errors.New("duplicate email")
 var ErrEditConflict = errors.New("edit conflict")
 
 type User struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Password  password  `json:"-"`
-	Activated bool      `json:"activated"`
-	Version   int       `json:"version"`
+	ID         int64     `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	Name       string    `json:"name"`
+	Email      string    `json:"email"`
+	Password   password  `json:"-"`
+	Activated  bool      `json:"activated"`
+	DailyLimit int       `json:"daily_limit"`
+	Version    int       `json:"version"`
 }
 
 var AnonymousUser = &User{}
@@ -146,7 +147,7 @@ func (m UserModel) GetForToken(scope string, tokenPlainText string) (*User, erro
 	hashToken := sha256.Sum256([]byte(tokenPlainText))
 
 	query := `
-		SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
+		SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version, users.daily_limit
 		FROM users
 		INNER JOIN tokens
 		ON users.id = tokens.user_id
@@ -170,6 +171,7 @@ func (m UserModel) GetForToken(scope string, tokenPlainText string) (*User, erro
 		&u.Password.hash,
 		&u.Activated,
 		&u.Version,
+		&u.DailyLimit,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

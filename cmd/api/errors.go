@@ -71,3 +71,13 @@ func (app *application) rateLimitExceededResponse(w http.ResponseWriter, r *http
 	message := "ratelimit exceeded response"
 	app.errorResponse(w, r, http.StatusTooManyRequests, message)
 }
+
+func (app *application) invalidApiKeyResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid or missing API key"
+	app.errorResponse(w, r, http.StatusUnauthorized, message)
+}
+
+func (app *application) usageLimitExceededResponse(w http.ResponseWriter, r *http.Request) {
+	message := "daily usage limit exceeded"
+	app.errorResponse(w, r, http.StatusTooManyRequests, message)
+}
