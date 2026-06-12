@@ -37,8 +37,8 @@ type config struct {
 		password string
 		sender   string
 	}
-	runnerPoolSize int
-	redisURL       string
+	redisURL   string
+	workerAddr string
 }
 
 type application struct {
@@ -69,8 +69,8 @@ func main() {
 	flag.StringVar(&cfg.smtp.password, "smtp-pass", os.Getenv("SMTPPASS"), "SMTP password")
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", os.Getenv("SMTP_SENDER"), "SMTP sender")
 
-	flag.IntVar(&cfg.runnerPoolSize, "runner-poolsize", 3, "Code Runner Pool Size")
 	flag.StringVar(&cfg.redisURL, "redis-url", os.Getenv("REDIS_URL"), "Redis server URL")
+	flag.StringVar(&cfg.workerAddr, "worker-addr", os.Getenv("WORKER_ADDR"), "Worker gRPC address (host:port)")
 
 	flag.Parse()
 
@@ -87,11 +87,12 @@ func main() {
 
 	logger.Info("postgres database connection pool established")
 
-	dockerRunner, err := runner.NewDockerRunner(logger, cfg.runnerPoolSize)
+	grpcClient, err := runner.NewGRPCRunnerClient(cfg.workerAddr)
 	if err != nil {
-		logger.Error("failed to create code runner", "error", err)
+		logger.Error("failed to connect to worker", "error", err)
 		os.Exit(1)
 	}
+	logger.Info("connected to worker service", "addr", cfg.workerAddr)
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: cfg.redisURL,
@@ -110,7 +111,7 @@ func main() {
 		config:  cfg,
 		logger:  logger,
 		models:  data.NewModels(db),
-		runner:  dockerRunner,
+		runner:  grpcClient,
 		mailer:  mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 		limiter: ratelimiter.New(redisClient),
 	}
@@ -149,7 +150,7 @@ func main() {
 		srv.Close()
 	}
 
-	dockerRunner.Close()
+	grpcClient.Close()
 	redisClient.Close()
 	logger.Info("server stopped")
 }

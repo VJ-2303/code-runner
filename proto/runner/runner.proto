@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package runner;
+
+option go_package = "github.com/VJ-2303/code-runner/proto/runner";
+
+service RunnerService {
+  rpc RunCode(RunCodeRequest) returns (RunCodeResponse);
+}
+
+message RunCodeRequest {
+  string code = 1;
+  string language = 2;
+  string stdin = 3;
+}
+
+message RunCodeResponse {
+  string output = 1;
+  string error = 2;
+}
