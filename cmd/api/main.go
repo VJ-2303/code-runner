@@ -73,7 +73,7 @@ func main() {
 
 	flag.StringVar(&cfg.redisURL, "redis-url", os.Getenv("REDIS_URL"), "Redis server URL")
 
-	flag.StringVar(&cfg.rabbitmq.url, "rabbitmq-url", "amqp://guest:guest@localhost:5672/", "RabbitMQ connection URL")
+	flag.StringVar(&cfg.rabbitmq.url, "rabbitmq-url", os.Getenv("RABBITMQ_URL"), "RabbitMQ connection URL")
 
 	flag.Parse()
 
