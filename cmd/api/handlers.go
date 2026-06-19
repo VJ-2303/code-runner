@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/VJ-2303/code-runner/internal/broker"
 	"github.com/VJ-2303/code-runner/internal/data"
 	"github.com/VJ-2303/code-runner/internal/validator"
+	"github.com/google/uuid"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -48,15 +50,42 @@ func (app *application) runCodeHandler(w http.ResponseWriter, r *http.Request) {
 		app.failedValidationResponse(w, r, v.FieldErrors)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
-	result, err := app.runner.Run(ctx, input.Code, input.Language, input.Stdin)
+	jobID := uuid.New()
+	user := contextGetUser(r)
+	job := &data.Job{
+		ID:       jobID,
+		UserID:   user.ID,
+		Language: input.Language,
+		Code:     input.Code,
+		Stdin:    input.Stdin,
+		Status:   "PENDING",
+	}
+
+	err = app.models.Jobs.Insert(job)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"result": result}, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	executionJob := broker.ExecutionPayload{
+		JobID:    job.ID,
+		Language: input.Language,
+		Code:     input.Code,
+		Stdin:    input.Stdin,
+	}
+
+	err = app.rabbitmq.Publish(ctx, executionJob)
+
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"job_id": jobID, "status": "PENDING", "message": "code submitted successfully"}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}

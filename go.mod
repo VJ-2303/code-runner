@@ -6,10 +6,10 @@ require github.com/lib/pq v1.10.9
 
 require (
 	github.com/docker/docker v28.5.2+incompatible
+	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.20.1
 	golang.org/x/crypto v0.53.0
 	google.golang.org/grpc v1.81.1
-	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -31,6 +31,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rabbitmq/amqp091-go v1.12.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
@@ -43,6 +44,7 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/mail.v2 v2.3.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )

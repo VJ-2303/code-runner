@@ -11,15 +11,12 @@ import (
 	"syscall"
 
 	"github.com/VJ-2303/code-runner/internal/runner"
-	pb "github.com/VJ-2303/code-runner/proto/runner"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type workerServer struct {
-	pb.UnimplementedRunnerServiceServer
-
 	runner *runner.DockerRunner
 	logger *slog.Logger
 }

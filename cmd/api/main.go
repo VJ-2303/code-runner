@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/VJ-2303/code-runner/internal/broker"
 	"github.com/VJ-2303/code-runner/internal/data"
 	"github.com/VJ-2303/code-runner/internal/mailer"
 	"github.com/VJ-2303/code-runner/internal/ratelimiter"
-	"github.com/VJ-2303/code-runner/internal/runner"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -37,17 +37,19 @@ type config struct {
 		password string
 		sender   string
 	}
-	redisURL   string
-	workerAddr string
+	redisURL string
+	rabbitmq struct {
+		url string
+	}
 }
 
 type application struct {
-	config  config
-	logger  *slog.Logger
-	models  data.Models
-	runner  runner.Runner
-	mailer  mailer.Mailer
-	limiter *ratelimiter.RateLimiter
+	config   config
+	logger   *slog.Logger
+	models   data.Models
+	mailer   mailer.Mailer
+	limiter  *ratelimiter.RateLimiter
+	rabbitmq *broker.RabbitMQ
 }
 
 func main() {
@@ -70,7 +72,8 @@ func main() {
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", os.Getenv("SMTP_SENDER"), "SMTP sender")
 
 	flag.StringVar(&cfg.redisURL, "redis-url", os.Getenv("REDIS_URL"), "Redis server URL")
-	flag.StringVar(&cfg.workerAddr, "worker-addr", os.Getenv("WORKER_ADDR"), "Worker gRPC address (host:port)")
+
+	flag.StringVar(&cfg.rabbitmq.url, "rabbitmq-url", "amqp://guest:guest@localhost:5672/", "RabbitMQ connection URL")
 
 	flag.Parse()
 
@@ -87,13 +90,6 @@ func main() {
 
 	logger.Info("postgres database connection pool established")
 
-	grpcClient, err := runner.NewGRPCRunnerClient(cfg.workerAddr)
-	if err != nil {
-		logger.Error("failed to connect to worker", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("connected to worker service", "addr", cfg.workerAddr)
-
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: cfg.redisURL,
 	})
@@ -107,13 +103,22 @@ func main() {
 	}
 	logger.Info("redis connection established")
 
+	logger.Info("connecting to rabbitmq")
+
+	rmq, err := broker.NewRabbitMQ(cfg.rabbitmq.url)
+	if err != nil {
+		logger.Error("failed to connect to rabbitmq", "error", err)
+		os.Exit(1)
+	}
+	defer rmq.Close()
+
 	app := &application{
-		config:  cfg,
-		logger:  logger,
-		models:  data.NewModels(db),
-		runner:  grpcClient,
-		mailer:  mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
-		limiter: ratelimiter.New(redisClient),
+		config:   cfg,
+		logger:   logger,
+		models:   data.NewModels(db),
+		mailer:   mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
+		limiter:  ratelimiter.New(redisClient),
+		rabbitmq: rmq,
 	}
 
 	srv := &http.Server{
@@ -150,7 +155,6 @@ func main() {
 		srv.Close()
 	}
 
-	grpcClient.Close()
 	redisClient.Close()
 	logger.Info("server stopped")
 }

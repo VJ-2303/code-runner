@@ -11,6 +11,7 @@ type Models struct {
 	Users   UserModel
 	Tokens  TokenModel
 	ApiKeys ApiKeyModel
+	Jobs    JobsModel
 }
 
 func NewModels(db *sql.DB) Models {
@@ -18,5 +19,6 @@ func NewModels(db *sql.DB) Models {
 		Users:   UserModel{DB: db},
 		Tokens:  TokenModel{DB: db},
 		ApiKeys: ApiKeyModel{DB: db},
+		Jobs:    JobsModel{DB: db},
 	}
 }
